@@ -27,7 +27,6 @@ class ApiClient {
 
         let userId = session?.user?.id || '';
 
-        // --- ROLE DETECTION FIX ---
         // 1. Try to get role from metadata
         let role = session?.user?.user_metadata?.role;
 
@@ -76,7 +75,6 @@ class ApiClient {
         return this.request('/');
     }
 
-    // NEW: Fetch Patient Profile via Backend (Avoids RLS 406 Error)
     async getPatientProfile(userId: string): Promise<any> {
         return this.request(`/auth/profile/${userId}`);
     }
@@ -143,7 +141,7 @@ class ApiClient {
             throw new Error("Findings not ready or accessible");
         }
 
-        // --- FIX: Clean path to avoid duplicating bucket name ---
+        // Clean path to avoid duplicating bucket name
         // If the DB path is "ml_json/file.json" and we request from bucket "ml_json",
         // Supabase might create "ml_json/ml_json/file.json". We strip the prefix.
         let cleanPath = result.json_path;

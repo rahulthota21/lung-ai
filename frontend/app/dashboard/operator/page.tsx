@@ -99,6 +99,8 @@ export default function OperatorDashboardPage() {
             ));
         } catch (e) {
             alert('Failed to start processing. Please try again.');
+        } finally {
+            // FIX: Always remove ID from processing set, success or fail
             setProcessingIds(prev => {
                 const next = new Set(prev);
                 next.delete(caseId);
