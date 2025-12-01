@@ -1,0 +1,45 @@
+﻿# Node / build
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+
+# Python virtual envs
+venv/
+venv310/
+**/.venv
+**/venv
+**/venv310
+
+# OS / editor / notebooks
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.ipynb_checkpoints/
+
+# Sensitive / config
+.env
+*.env
+
+# Large artifacts & datasets (ignore everywhere)
+**/outputs/
+**/models/
+**/data/
+*.pth
+*.pkl
+*.ckpt
+*.h5
+*.zip
+*.tar.gz
+*.npy
+
+# Build / logs / python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Misc
+test_ct_extracted.zip

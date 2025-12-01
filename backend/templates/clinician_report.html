@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Clinician Report - {{ findings.study_id }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            color: #333;
+        }
+
+        .header {
+            border-bottom: 2px solid #2c5aa0;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #2c5aa0;
+            margin: 0;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section h2 {
+            color: #2c5aa0;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #2c5aa0;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .high-risk {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+
+        .medium-risk {
+            color: #f57c00;
+        }
+
+        .low-risk {
+            color: #388e3c;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .info-item {
+            padding: 5px 0;
+        }
+
+        .label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .impression-box {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2c5aa0;
+            padding: 15px;
+            margin-top: 10px;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>🫁 Lung-ATM Clinician Report</h1>
+        <p>AI-Assisted CT Scan Analysis</p>
+    </div>
+
+    <div class="section">
+        <h2>Patient Information</h2>
+        <div class="info-grid">
+            <div class="info-item"><span class="label">Study ID:</span> {{ findings.study_id }}</div>
+            <div class="info-item"><span class="label">Patient:</span> {{ findings.patient_name }}</div>
+            <div class="info-item"><span class="label">Age:</span> {{ findings.patient_age }}</div>
+            <div class="info-item"><span class="label">Gender:</span> {{ findings.patient_gender }}</div>
+            <div class="info-item"><span class="label">Scan Date:</span> {{ findings.scan_date }}</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Lung Assessment</h2>
+        <div class="info-grid">
+            <div class="info-item"><span class="label">Overall Health:</span> {{ findings.lung_health }}</div>
+            <div class="info-item"><span class="label">Airway Wall:</span> {{ findings.airway_wall_thickness }}</div>
+            <div class="info-item"><span class="label">Emphysema Score:</span> {{ findings.emphysema_score }}</div>
+            <div class="info-item"><span class="label">Fibrosis Score:</span> {{ findings.fibrosis_score }}</div>
+            <div class="info-item"><span class="label">Consolidation Score:</span> {{ findings.consolidation_score }}
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Nodule Findings ({{ findings.num_nodules }} detected)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Location</th>
+                    <th>Size (mm)</th>
+                    <th>Volume (mm³)</th>
+                    <th>Malignancy Prob</th>
+                    <th>Risk</th>
+                    <th>Review</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for nodule in nodules %}
+                <tr>
+                    <td>{{ nodule.id }}</td>
+                    <td>{{ nodule.type }}</td>
+                    <td>{{ nodule.location }}</td>
+                    <td>{{ nodule.long_axis_mm }}</td>
+                    <td>{{ nodule.volume_mm3 }}</td>
+                    <td>{{ (nodule.prob_malignant * 100)|round(1) }}%</td>
+                    <td class="{{ nodule.risk_level|lower }}-risk">{{ nodule.risk_level }}</td>
+                    <td>{% if nodule.uncertainty.needs_review %}⚠️ Yes{% else %}No{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Clinical Impression</h2>
+        <div class="impression-box">
+            {{ findings.impression }}
+        </div>
+    </div>
+
+    <div class="footer">
+        <p><strong>Disclaimer:</strong> This report is AI-generated and intended to assist clinical decision-making.
+            It should not replace professional medical judgment. All findings should be verified by a qualified
+            radiologist.</p>
+        <p>Generated by Lung-ATM System | {{ findings.scan_date }}</p>
+    </div>
+</body>
+
+</html>
