@@ -1,5 +1,3 @@
-// frontend/app/dashboard/operator/page.tsx
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -403,7 +401,18 @@ export default function OperatorDashboardPage() {
                                                             {isProcessing ? 'Starting...' : '⚡ Process Scan'}
                                                         </button>
                                                     )}
-                                                    {c.status === 'completed' && <span style={{ fontSize: '13px', color: '#a1a1aa' }}>Review Ready</span>}
+                                                    {c.status === 'completed' && (
+                                                        <button
+                                                            onClick={() => router.push(`/results/${c.id}`)}
+                                                            style={{
+                                                                ...styles.btnProcess,
+                                                                backgroundColor: '#22c55e',
+                                                                color: 'white'
+                                                            }}
+                                                        >
+                                                            👁️ View Results
+                                                        </button>
+                                                    )}
                                                     {c.status === 'processing' && <span style={{ fontSize: '13px', color: '#eab308' }}>AI Analyzing...</span>}
                                                 </td>
                                             </tr>

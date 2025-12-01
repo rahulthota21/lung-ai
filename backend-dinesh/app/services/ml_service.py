@@ -1,16 +1,15 @@
 # app/services/ml_service.py
-
 import zipfile
 import tempfile
 from pathlib import Path
 import subprocess
 import shutil
 import sys
+import json
+import time
 
-# Import Supabase + DB service
 from app.supabase_client import supabase
 from app.services.scan_result_service import ScanResultService
-
 
 class MLService:
 
@@ -122,6 +121,7 @@ class MLService:
             possible_paths = [
                 backend_root / "outputs" / f"{case_id}_findings.json",
                 backend_root.parent / "backend-dinesh" / "outputs" / f"{case_id}_findings.json",
+                backend_root / "backend-dinesh" / "outputs" / f"{case_id}_findings.json",
             ]
 
             json_local_path = None
@@ -137,22 +137,62 @@ class MLService:
 
             # -------------------------------------------------------
             # STEP 6 — UPLOAD JSON TO SUPABASE ml_json
+            # Robustly handle existing resource (Duplicate)
             # -------------------------------------------------------
             storage_key = f"{case_id}/findings.json"
             json_bytes = json_local_path.read_bytes()
 
             print(f"[ML] Uploading JSON → ml_json/{storage_key}")
 
-            supabase.storage.from_("ml_json").upload(
-                storage_key,
-                json_bytes,
-                {"content-type": "application/json"}
-            )
+            try:
+                # first attempt: upload
+                supabase.storage.from_("ml_json").upload(
+                    storage_key,
+                    json_bytes,
+                    {"content-type": "application/json"}
+                )
+                print("[ML] Upload succeeded (new object).")
+
+            except Exception as e:
+                # detect duplicate / already exists error message
+                msg = str(e)
+                print(f"[ML] Upload error: {msg}")
+
+                duplicate_indicators = ["Duplicate", "already exists", "The resource already exists"]
+                if any(indicator in msg for indicator in duplicate_indicators):
+                    # Try removing existing object and re-uploading
+                    try:
+                        print("[ML] Attempting to remove existing object and re-upload...")
+                        supabase.storage.from_("ml_json").remove(storage_key)
+                        # small delay to ensure remote is consistent
+                        time.sleep(0.3)
+                        supabase.storage.from_("ml_json").upload(
+                            storage_key,
+                            json_bytes,
+                            {"content-type": "application/json"}
+                        )
+                        print("[ML] Re-upload succeeded after removing existing object.")
+                    except Exception as e2:
+                        # final fallback: report detailed failure
+                        raise Exception({
+                            "statusCode": 500,
+                            "error": "UploadFailed",
+                            "message": f"Upload failed after attempting remove. original: {msg}, remove error: {e2}"
+                        })
+                else:
+                    # not a duplicate error — re-raise with context
+                    raise Exception({
+                        "statusCode": 500,
+                        "error": "UploadFailed",
+                        "message": f"Upload failed: {msg}"
+                    })
 
             # -------------------------------------------------------
-            # STEP 7 — UPDATE scan_results TABLE
+            # STEP 7 — UPDATE scan_results TABLE (UPSERT)
             # -------------------------------------------------------
-            ScanResultService.update_json_path(case_id, storage_key)
+            # Note: upsert_result should perform an upsert (insert or update),
+            # so it will not fail on duplicate DB rows.
+            ScanResultService.upsert_result(case_id, storage_key)
             print(f"[ML] Updated scan_results for case {case_id}")
 
             return True

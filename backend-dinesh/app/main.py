@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import upload, process, cases, doctor, chat
+from app.routes import upload, process, cases, doctor, chat, scan_results
+
+
 
 app = FastAPI(title="CT Backend FYP")
 
@@ -17,7 +19,7 @@ app.include_router(process.router)
 app.include_router(cases.router)
 app.include_router(doctor.router)
 app.include_router(chat.router)
-
+app.include_router(scan_results.router)
 @app.get("/")
 def root():
     return {"message": "Backend Running"}

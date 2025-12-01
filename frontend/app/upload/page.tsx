@@ -1,5 +1,3 @@
-// frontend/app/upload/page.tsx
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -89,7 +87,7 @@ export default function UploadPage() {
             if (patientParam) {
                 setPatientId(patientParam);
 
-                // --- FIX: Use Backend API to avoid 406 RLS Error ---
+                // Use Backend API to avoid 406 RLS Error
                 try {
                     const patientProfile = await api.getPatientProfile(patientParam);
                     if (patientProfile) setPatientName(patientProfile.full_name);
@@ -163,10 +161,10 @@ export default function UploadPage() {
 
         let finalPatientId = patientId;
 
+        // 1. Handle Walk-in Patient Creation
         if (isNewPatient && newPatientData) {
             try {
                 // Generate a temporary email/pass if none provided
-                // This fallback logic handles cases where user came from mode=new-patient but not created yet
                 const email = `walkin.${newPatientData.phone}.${Date.now()}@lungatm.com`;
                 const password = `Temp${Date.now()}!`;
 
@@ -183,20 +181,26 @@ export default function UploadPage() {
                 finalPatientId = newId;
                 setPatientName(newPatientData.full_name);
             } catch (e: any) {
-                setError(`Failed to create patient record: ${e.message}`);
+                console.error("Creation error:", e);
+                setStatus('error');
+                setError(`Failed to create patient: ${e.message}`);
                 return;
             }
         }
 
+        // 2. Handle Self-Upload Fallback
         if (!finalPatientId && user.role === 'patient') {
             finalPatientId = user.id;
         }
 
+        // 3. Validation
         if (!finalPatientId) {
+            setStatus('error');
             setError('No patient selected');
             return;
         }
 
+        // 4. Start Upload
         setStatus('uploading');
         setError(null);
         setProgress(10);
@@ -216,23 +220,29 @@ export default function UploadPage() {
                 throw new Error("Upload failed: No Scan ID returned from server.");
             }
 
-            if (user.role === 'operator' || user.role === 'doctor') {
-                setStatus('processing');
-                await api.processCase(result.scan_id);
-            } else {
-                setStatus('success');
-            }
+            // 5. Trigger Processing (FOR EVERYONE - Patients, Operators, Doctors)
+            setStatus('processing');
 
+            // Fire and Forget: Do NOT await this promise.
+            // This prevents the frontend from timing out while the backend processes.
+            api.processCase(result.scan_id).catch(err => {
+                console.log("Background processing started (or polling will handle errors).");
+            });
+
+            // 6. Start Polling (This will wait for the result)
             pollScanStatus(result.scan_id);
 
         } catch (e: any) {
+            console.error("Upload/Process error:", e);
             setStatus('error');
             setError(e.message || 'Upload failed. Please try again.');
         }
     }
 
     async function pollScanStatus(scanId: string) {
-        const maxAttempts = 60; // 5 minutes max
+        // --- FIX: INCREASED TIMEOUT TO 20 MINUTES ---
+        // 400 attempts * 3 seconds = 1200 seconds = 20 minutes
+        const maxAttempts = 400;
         let attempts = 0;
 
         const poll = async () => {
@@ -258,6 +268,7 @@ export default function UploadPage() {
                     return;
                 }
 
+                // Poll every 3 seconds
                 setTimeout(poll, 3000);
             } catch (e) {
                 setTimeout(poll, 3000);
@@ -517,6 +528,29 @@ export default function UploadPage() {
                             {/* SELECTED STATE */}
                             {status === 'idle' && selectedFile && (
                                 <div>
+                                    {/* ERROR ALERT */}
+                                    {error && (
+                                        <div style={{
+                                            padding: '12px',
+                                            backgroundColor: '#fef2f2',
+                                            color: '#ef4444',
+                                            borderRadius: '8px',
+                                            marginBottom: '16px',
+                                            border: '1px solid #fecaca',
+                                            fontSize: '14px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}>
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <circle cx="12" cy="12" r="10"></circle>
+                                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                            </svg>
+                                            {error}
+                                        </div>
+                                    )}
+
                                     <div style={styles.fileSelected}>
                                         <div style={styles.fileInfo}>
                                             <div style={styles.fileIcon}>📄</div>
@@ -550,7 +584,8 @@ export default function UploadPage() {
                                 <div style={styles.progressContainer}>
                                     <div style={styles.spinner}></div>
                                     <div style={styles.progressTitle}>AI Processing...</div>
-                                    <div style={styles.progressText}>Analyzing lung nodules. This takes about 30s.</div>
+                                    {/* --- FIX: UI Feedback --- */}
+                                    <div style={styles.progressText}>Analyzing lung nodules. This usually takes 5-10 minutes. Please do not close the tab.</div>
                                 </div>
                             )}
 
