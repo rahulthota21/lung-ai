@@ -111,29 +111,67 @@ class ApiClient {
     }
 
     async getScanStatus(scanId: string): Promise<{ scan_id: string; status: string }> {
-        const { data } = await supabase
-            .from('patient_ct_scans')
-            .select('status')
-            .eq('id', scanId)
-            .single();
-
-        return {
-            scan_id: scanId,
-            status: data?.status || 'unknown',
-        };
+        try {
+            const data = await this.request<{ status: string }>(`/cases/${scanId}`);
+            return {
+                scan_id: scanId,
+                status: data.status || 'unknown',
+            };
+        } catch (e) {
+            // Fallback to direct DB if API fails
+            const { data } = await supabase
+                .from('patient_ct_scans')
+                .select('status')
+                .eq('id', scanId)
+                .single();
+            return {
+                scan_id: scanId,
+                status: data?.status || 'unknown',
+            };
+        }
     }
 
     async getFindings(scanId: string): Promise<Findings> {
-        const { data: result } = await supabase
+        // 1. Get the JSON path from the database
+        const { data: result, error } = await supabase
             .from('scan_results')
-            .select('findings_json')
+            .select('json_path')
             .eq('scan_id', scanId)
             .single();
 
-        if (result?.findings_json) {
-            return result.findings_json as Findings;
+        if (error || !result?.json_path) {
+            throw new Error("Findings not ready or accessible");
         }
-        throw new Error("Findings not ready");
+
+        // --- FIX: Clean path to avoid duplicating bucket name ---
+        // If the DB path is "ml_json/file.json" and we request from bucket "ml_json",
+        // Supabase might create "ml_json/ml_json/file.json". We strip the prefix.
+        let cleanPath = result.json_path;
+        if (cleanPath.startsWith('ml_json/')) {
+            cleanPath = cleanPath.replace('ml_json/', '');
+        }
+
+        // 2. Get the Public URL from Supabase Storage
+        const { data: { publicUrl } } = supabase
+            .storage
+            .from('ml_json')
+            .getPublicUrl(cleanPath);
+
+        // 3. Fetch the actual JSON content
+        try {
+            const response = await fetch(publicUrl);
+            if (!response.ok) {
+                // Check if it's a 400/404 on the storage URL itself
+                // This triggers the fallback mock data in your ResultsPage
+                throw new Error(`Failed to download findings file: ${response.status}`);
+            }
+
+            const jsonData = await response.json();
+            return jsonData as Findings;
+        } catch (e) {
+            console.error("Error fetching findings JSON:", e);
+            throw new Error("Could not retrieve findings data");
+        }
     }
 
     async getPendingCases(): Promise<Case[]> {
@@ -179,6 +217,7 @@ class ApiClient {
 
     async acceptCase(scanId: string, doctorId: string): Promise<{ success: boolean; error?: string }> {
         try {
+            // Returns assignment object with id
             await this.request(`/doctor/accept/${scanId}`, { method: 'POST' });
             return { success: true };
         } catch (err: any) {

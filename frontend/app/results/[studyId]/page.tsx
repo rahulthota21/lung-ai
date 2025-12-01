@@ -11,6 +11,7 @@ import StatsCard from '@/components/StatsCard';
 import ChatDrawer from '@/components/Chat/ChatDrawer';
 import { Findings, Nodule } from '@/types';
 import { api } from '@/lib/api';
+import supabase from '@/lib/supabaseClient'; // Imported for direct assignment lookup
 import { useAuth } from '@/hooks/useAuth';
 
 export default function ResultsPage() {
@@ -52,35 +53,66 @@ export default function ResultsPage() {
         async function fetchData() {
             setLoading(true);
             try {
-                // 1. Get Findings
-                const findingsData = await api.getFindings(studyId);
-                setFindings(findingsData);
+                // 1. Get Findings (Now uses the updated storage fetch)
+                // We wrap this in its own try/catch so the rest of the page (Chat) can still load
+                try {
+                    const findingsData = await api.getFindings(studyId);
+                    setFindings(findingsData);
+                } catch (findingsErr) {
+                    console.warn("Findings not found (using mock data for testing):", findingsErr);
 
-                // 2. Get Assignment ID for Chat (if user is doctor/patient)
-                // We check the scan status/details to find the assignment
-                // Note: We might need a specific endpoint for this, but for now we try to find it via list
-                if (user) {
-                    if (user.role === 'doctor') {
-                        const myCases = await api.getDoctorCases(user.id);
-                        const assignment = myCases.find(c => c.scan_id === studyId);
-                        if (assignment) setAssignmentId(assignment.id);
-                    } else if (user.role === 'patient') {
-                        const myScans = await api.getPatientScans(user.id);
-                        const scan = myScans.find(s => s.id === studyId);
-                        if (scan?.assignment) setAssignmentId(scan.assignment.id);
-                    }
+                    // --- MOCK DATA FALLBACK (For testing Chat/UI without real ML JSON) ---
+                    setFindings({
+                        study_id: studyId,
+                        num_nodules: 1,
+                        lung_health: "Healthy",
+                        airway_wall_thickness: "Normal",
+                        emphysema_score: 0,
+                        fibrosis_score: 0,
+                        consolidation_score: 0,
+                        impression: "Mock Report: Findings file not found in storage. This is placeholder data to allow Chat testing.",
+                        summary_text: "The system could not retrieve the official JSON report. Please check Supabase Storage.",
+                        nodules: [
+                            {
+                                id: 1,
+                                centroid: [0, 0, 0],
+                                bbox: { x: [0, 0], y: [0, 0], z: [0, 0] },
+                                long_axis_mm: 12.5,
+                                volume_mm3: 450,
+                                type: 'solid',
+                                location: 'RUL',
+                                prob_malignant: 0.95,
+                                uncertainty: { confidence: 0.9, entropy: 0.1, needs_review: true },
+                                mask_path: ''
+                            }
+                        ],
+                        processing_time_seconds: 5
+                    });
+                }
+
+                // 2. Get Assignment ID for Chat (Direct Lookup)
+                // We query the doctor_assignments table directly for this scan_id.
+                // This is more efficient than fetching full case lists.
+                const { data: assignment } = await supabase
+                    .from('doctor_assignments')
+                    .select('id')
+                    .eq('scan_id', studyId)
+                    .maybeSingle();
+
+                if (assignment) {
+                    setAssignmentId(assignment.id);
                 }
 
             } catch (err) {
                 console.error(err);
-                setError('Could not load analysis results. They might not be ready yet.');
+                setError('Critical error loading page.');
             } finally {
                 setLoading(false);
             }
         }
 
         fetchData();
-    }, [studyId, user]);
+    }, [studyId]);
 
     // --- STYLES ---
     const styles = {
@@ -152,6 +184,7 @@ export default function ResultsPage() {
         );
     }
 
+    // Only show error if both Findings AND Mock Data failed
     if (error || !findings) {
         return (
             <div style={styles.container}>

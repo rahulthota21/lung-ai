@@ -8,7 +8,8 @@ router = APIRouter(prefix="/process", tags=["process"])
 
 @router.post("/case/{case_id}")
 def process_case(case_id: str, user = Depends(get_current_user)):
-    if user.role not in ("operator", "doctor"):
+    # --- FIX: Added "patient" to allowed roles ---
+    if user.role not in ("operator", "doctor", "patient"):
         raise HTTPException(403, "Not allowed")
 
     case = CaseService.get_case(case_id)
@@ -21,6 +22,8 @@ def process_case(case_id: str, user = Depends(get_current_user)):
         MLService.run_pipeline(case_id, case["storage_path"])
     except Exception as e:
         CaseService.update_status(case_id, "failed")
+        # Log the error internally but don't crash the request if possible, 
+        # or raise 500 as before. keeping it simple:
         raise HTTPException(500, f"Pipeline error: {e}")
 
     return {"status": "completed"}
